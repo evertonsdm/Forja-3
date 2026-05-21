@@ -31,7 +31,8 @@ import {
   SlidersHorizontal,
   Flame,
   Scale,
-  Clipboard
+  Clipboard,
+  Terminal
 } from "lucide-react";
 
 // 1. DOCK CATEGORY COLORS AND LABELS HELPER
@@ -661,6 +662,11 @@ export const AlchemyPanel: React.FC<AlchemyPanelProps> = ({
   const [smartPasteText, setSmartPasteText] = useState("");
   const [isSmartPasteExpanded, setIsSmartPasteExpanded] = useState(false);
 
+  // Advanced Injection states
+  const [isAdvancedModalOpen, setIsAdvancedModalOpen] = useState(false);
+  const [advancedText, setAdvancedText] = useState("");
+  const [advancedField, setAdvancedField] = useState<"req_tags" | "add_tags">("add_tags");
+
   // Dynamic Property Editor states
   const [newModName, setNewModName] = useState("");
   const [newModPrefix, setNewModPrefix] = useState<"mult_" | "mod_">("mult_");
@@ -872,6 +878,246 @@ export const AlchemyPanel: React.FC<AlchemyPanelProps> = ({
         "error"
       );
     }
+  };
+
+  const handleAdvancedInjection = (text: string, targetField: "req_tags" | "add_tags") => {
+    if (!text || !text.trim()) {
+      triggerToast("Texto Vazio", "Favor preencher a área de texto com a DSL de injeção.", true, "error");
+      return;
+    }
+
+    const normalizeStr = (str: string) => {
+      if (!str) return "";
+      return str
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .trim();
+    };
+
+    const lines = text.split("\n");
+    let updatedCount = 0;
+    let ignoredCount = 0;
+    let alreadyHadCount = 0;
+
+    // Track targets updated
+    const tagsToMergeByItemId: Record<string, string[]> = {};
+
+    lines.forEach(line => {
+      const cleanLine = line.trim();
+      if (!cleanLine) return;
+
+      const colonIndex = cleanLine.indexOf(":");
+      if (colonIndex === -1) {
+        ignoredCount++;
+        return;
+      }
+
+      const target = cleanLine.substring(0, colonIndex).trim();
+      const tagsStr = cleanLine.substring(colonIndex + 1).trim();
+
+      if (!target || !tagsStr) {
+        ignoredCount++;
+        return;
+      }
+
+      const parsedTags = tagsStr.split(/[,;]+/).map(t => t.trim()).filter(Boolean);
+      if (parsedTags.length === 0) {
+        ignoredCount++;
+        return;
+      }
+
+      let mainName = target;
+      let filterTag: string | null = null;
+
+      if (target.includes("/")) {
+        const index = target.indexOf("/");
+        mainName = target.substring(0, index).trim();
+        filterTag = target.substring(index + 1).trim();
+      }
+
+      const normMainName = normalizeStr(mainName);
+
+      const matches = alchemyItemsList.filter(item => {
+        const normId = normalizeStr(item.id);
+        const normName = normalizeStr(item.name);
+
+        const idMatch = normId === normMainName;
+        const nameMatch = normName === normMainName;
+
+        if (!idMatch && !nameMatch) return false;
+
+        if (filterTag) {
+          const lowerFilter = filterTag.toLowerCase().trim();
+
+          const inReqTags = (item.req_tags || []).some((t: string) => {
+            const normTag = t.toLowerCase().trim();
+            return (
+              normTag === lowerFilter ||
+              normTag.includes(lowerFilter) ||
+              normTag.replace(/^[a-z]{2,4}_/, "") === lowerFilter
+            );
+          });
+
+          const inAddTags = (item.add_tags || []).some((t: string) => {
+            const normTag = t.toLowerCase().trim();
+            return (
+              normTag === lowerFilter ||
+              normTag.includes(lowerFilter) ||
+              normTag.replace(/^[a-z]{2,4}_/, "") === lowerFilter
+            );
+          });
+
+          const inId = normId.includes(lowerFilter) || normId.replace(/^[a-z]{2,4}_/, "") === lowerFilter;
+
+          const inRawProps = item.rawItem ? Object.entries(item.rawItem).some(([key, val]) => {
+            if (typeof val === "string") {
+              const normVal = normalizeStr(val);
+              return (
+                normVal === lowerFilter ||
+                normVal.includes(lowerFilter) ||
+                normVal.replace(/^[a-z]{2,4}_/, "") === lowerFilter
+              );
+            }
+            if (Array.isArray(val)) {
+              return val.some(v => {
+                if (typeof v !== "string") return false;
+                const normVal = normalizeStr(v);
+                return (
+                  normVal === lowerFilter ||
+                  normVal.includes(lowerFilter) ||
+                  normVal.replace(/^[a-z]{2,4}_/, "") === lowerFilter
+                );
+              });
+            }
+            return false;
+          }) : false;
+
+          return inReqTags || inAddTags || inId || inRawProps;
+        }
+
+        return true;
+      });
+
+      if (matches.length > 0) {
+        matches.forEach(item => {
+          // Keep only non-associated tags (not in existing req_tags nor active add_tags)
+          const existingTags = new Set([
+            ...(item.req_tags || []),
+            ...(item.add_tags || [])
+          ].map(t => t.toLowerCase().trim()));
+
+          const filteredNewTagsForThisItem = parsedTags.filter(tag => {
+            const cleanTagLower = tag.toLowerCase().trim();
+            return !existingTags.has(cleanTagLower);
+          });
+
+          if (filteredNewTagsForThisItem.length === 0) {
+            alreadyHadCount++;
+            return;
+          }
+
+          if (!tagsToMergeByItemId[item.id]) {
+            tagsToMergeByItemId[item.id] = [];
+          }
+          filteredNewTagsForThisItem.forEach(tag => {
+            if (!tagsToMergeByItemId[item.id].includes(tag)) {
+              tagsToMergeByItemId[item.id].push(tag);
+            }
+          });
+          updatedCount++;
+        });
+      } else {
+        ignoredCount++;
+      }
+    });
+
+    if (Object.keys(tagsToMergeByItemId).length === 0) {
+      triggerToast(
+        "Nenhum Item Atualizado",
+        `Os itens correspondentes já possuem todas as tags fornecidas ou as linhas não foram encontradas. (Ignoradas: ${ignoredCount}, Redundantes: ${alreadyHadCount})`,
+        true,
+        "warning"
+      );
+      return;
+    }
+
+    const targetKey = targetField === "req_tags" ? "req_tags" : "add_tags";
+
+    switch (selectedCategory) {
+      case "demografia":
+        setDemografia(prev => prev.map(d => {
+          const newTags = tagsToMergeByItemId[d.id_demo];
+          if (!newTags) return d;
+          const prevTags = d.add_tags || [];
+          return {
+            ...d,
+            add_tags: Array.from(new Set([...prevTags, ...newTags]))
+          };
+        }));
+        break;
+
+      case "socioeconomico":
+        setSocioeconomico(prev => prev.map(s => {
+          const newTags = tagsToMergeByItemId[s.id_socio];
+          if (!newTags) return s;
+          const prevTags = s[targetKey] || [];
+          return {
+            ...s,
+            [targetKey]: Array.from(new Set([...prevTags, ...newTags]))
+          };
+        }));
+        break;
+
+      case "cidade":
+        setCidades(prev => prev.map(c => {
+          const newTags = tagsToMergeByItemId[c.id_cidade];
+          if (!newTags) return c;
+          const prevTags = c[targetKey] || [];
+          return {
+            ...c,
+            [targetKey]: Array.from(new Set([...prevTags, ...newTags]))
+          };
+        }));
+        break;
+
+      case "estado":
+        setEstados(prev => prev.map(e => {
+          const newTags = tagsToMergeByItemId[e.id_estado];
+          if (!newTags) return e;
+          const prevTags = e.add_tags || [];
+          return {
+            ...e,
+            add_tags: Array.from(new Set([...prevTags, ...newTags]))
+          };
+        }));
+        break;
+
+      case "nome":
+        setNomes(prev => prev.map(n => {
+          const newTags = tagsToMergeByItemId[n.id_nome];
+          if (!newTags) return n;
+          const prevTags = n.req_tags || [];
+          return {
+            ...n,
+            req_tags: Array.from(new Set([...prevTags, ...newTags]))
+          };
+        }));
+        break;
+    }
+
+    const feedbackSub = `Sucesso: ${updatedCount} item(ns) atualizado(s) com novas tags. ${alreadyHadCount > 0 ? `${alreadyHadCount} já possuíam as tags. ` : ""}${ignoredCount > 0 ? `${ignoredCount} linha(s) ignoradas.` : ""}`;
+
+    triggerToast(
+      "Injeção Concluída!",
+      feedbackSub,
+      false,
+      "success"
+    );
+    
+    // Clear advancedText and close modal
+    setAdvancedText("");
+    setIsAdvancedModalOpen(false);
   };
 
   // Configure Sensors with touch optimization
@@ -2059,21 +2305,44 @@ export const AlchemyPanel: React.FC<AlchemyPanelProps> = ({
               {/* BATCH EDITING SELECTION CONTROLS */}
               <div className="bg-[#05060b] p-3 rounded-xl border border-indigo-950 space-y-2 select-none">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsBatchMode(!isBatchMode);
-                      setSelectedItemIds([]);
-                    }}
-                    className={`px-2.5 py-1 text-[9px] font-mono font-bold transition-all cursor-pointer flex items-center gap-1.5 border h-7 rounded-lg ${
-                      isBatchMode 
-                        ? "border-amber-400 text-amber-300 bg-amber-950/45 font-black shadow-[0_0_8px_rgba(245,158,11,0.2)]"
-                        : "border-indigo-950 text-indigo-400 hover:text-indigo-300 hover:border-indigo-900"
-                    }`}
-                  >
-                    <SlidersHorizontal className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
-                    <span>{isBatchMode ? "✓ Lote Ativo" : "Seleção em Lote"}</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsBatchMode(!isBatchMode);
+                        setSelectedItemIds([]);
+                      }}
+                      className={`px-2.5 py-1 text-[9px] font-mono font-bold transition-all cursor-pointer flex items-center gap-1.5 border h-7 rounded-lg ${
+                        isBatchMode 
+                          ? "border-amber-400 text-amber-300 bg-amber-950/45 font-black shadow-[0_0_8px_rgba(245,158,11,0.2)]"
+                          : "border-indigo-950 text-indigo-400 hover:text-indigo-300 hover:border-indigo-900"
+                      }`}
+                    >
+                      <SlidersHorizontal className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
+                      <span>{isBatchMode ? "✓ Lote Ativo" : "Seleção em Lote"}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAdvancedModalOpen(true);
+                        if (selectedCategory === "nome") {
+                          setAdvancedField("req_tags");
+                        } else {
+                          setAdvancedField("add_tags");
+                        }
+                      }}
+                      className={`px-2.5 py-1 text-[9px] font-mono font-bold transition-all cursor-pointer flex items-center gap-1.5 border h-7 rounded-lg ${
+                        isStealthMode 
+                          ? "border-gray-355 text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400"
+                          : "border-indigo-950/60 text-indigo-300 bg-indigo-950/20 hover:text-white hover:border-indigo-800"
+                      }`}
+                      title="Injetar tags em massa a partir de texto estruturado (DSL)"
+                    >
+                      <Terminal className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>Injetor Avançado</span>
+                    </button>
+                  </div>
 
                   {isBatchMode && (
                     <div className="flex items-center gap-2">
@@ -3197,6 +3466,160 @@ export const AlchemyPanel: React.FC<AlchemyPanelProps> = ({
                     className="px-4 py-2 bg-slate-950 hover:bg-slate-900 border border-indigo-950 text-indigo-400 hover:text-indigo-300 rounded-xl text-xs font-bold cursor-pointer"
                   >
                     Fechar
+                  </button>
+                </div>
+
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* ADVANCED TEXT-TO-DATA INJECTOR MODAL */}
+        <AnimatePresence>
+          {isAdvancedModalOpen && (
+            <div className={`fixed inset-0 z-[999999] flex items-center justify-center p-4 backdrop-blur-sm ${
+              isStealthMode ? "bg-black/50" : "bg-[#020205]/95 backdrop-blur-md"
+            }`}>
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 15 }}
+                className={`max-w-xl w-full p-6 text-left flex flex-col justify-between max-h-[90vh] ${
+                  isStealthMode 
+                    ? "bg-white border border-gray-300 rounded-none shadow-2xl text-gray-900 font-sans"
+                    : "bg-[#090b14] border border-indigo-500/25 rounded-3xl text-white font-mono shadow-2xl"
+                }`}
+              >
+                {/* Header */}
+                <div className={`flex items-center justify-between pb-3 mb-3 border-b ${
+                  isStealthMode ? "border-gray-200" : "border-indigo-950/80"
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <span className={`p-2 rounded-xl border ${
+                      isStealthMode 
+                        ? "bg-gray-150 border-gray-300 text-gray-700" 
+                        : "bg-indigo-950/60 border-indigo-500/20 text-indigo-400"
+                    }`}>
+                      <Terminal className="w-5 h-5 animate-pulse" />
+                    </span>
+                    <div>
+                      <h3 className={`text-xs font-black uppercase tracking-wider ${isStealthMode ? "text-gray-900 font-sans" : "text-white font-sans"}`}>
+                        Injetor de Dados Avançado (Text-to-Data DSL)
+                      </h3>
+                      <p className={`text-[10.5px] font-medium leading-tight mt-0.5 ${isStealthMode ? "text-gray-500 font-sans" : "text-[#747bbd] font-mono"}`}>
+                        Injete gemas e exigências em massa via texto estruturado
+                      </p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      setIsAdvancedModalOpen(false);
+                      setAdvancedText("");
+                    }}
+                    className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                      isStealthMode ? "hover:bg-gray-100 text-gray-400 hover:text-gray-800" : "hover:bg-indigo-950 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Instructions */}
+                <div className={`text-[9.5px] p-3 mb-3 border leading-relaxed rounded-xl ${
+                  isStealthMode 
+                    ? "bg-gray-50 border-gray-200 text-gray-600 font-sans" 
+                    : "bg-[#04050a] border-indigo-950/50 text-slate-400 font-mono"
+                }`}>
+                  <span className={`font-bold block mb-1 uppercase ${isStealthMode ? "text-gray-800" : "text-indigo-400"}`}>Como usar o formato DSL:</span>
+                  Escreva o nome do item ou filtro por linha, dois pontos (:), e depois as gemas separadas por vírgula. Exemplo:<br />
+                  <code className={`block mt-1 p-1 rounded font-bold text-[9px] ${isStealthMode ? "bg-gray-100 text-gray-800" : "bg-slate-950/80 text-amber-400"}`}>
+                    Santos/SP: Litoral, Turistico, Quente<br />
+                    Sao Paulo: Metropole, Capital, Economia
+                  </code>
+                </div>
+
+                {/* Textarea */}
+                <div className="flex-1 flex flex-col space-y-1 my-1">
+                  <span className={`text-[9.5px] uppercase font-bold tracking-wider ${isStealthMode ? "text-gray-600 font-sans" : "text-[#747bbd] font-mono"}`}>DSL de Injeção:</span>
+                  <textarea
+                    placeholder={"Cole seu bloco DSL aqui...\nExemplo:\nSantos/SP: Litoral, Turistico\nid_socio_advogado: OAB, Judiciario"}
+                    value={advancedText}
+                    onChange={(e) => setAdvancedText(e.target.value)}
+                    className={`w-full p-3 font-mono text-[10.5px] leading-normal resize-none flex-1 focus:outline-none focus:ring-1 ${
+                      isStealthMode 
+                        ? "bg-white border border-gray-300 text-gray-800 focus:border-gray-500 focus:ring-gray-300 rounded-lg h-56" 
+                        : "bg-slate-950 border border-indigo-950 text-slate-200 focus:border-fuchsia-500 focus:ring-indigo-950 rounded-xl h-56"
+                    }`}
+                  />
+                </div>
+
+                {/* Radios for target selection */}
+                <div className={`mt-3 py-2.5 px-3 border rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                  isStealthMode ? "border-gray-200 bg-gray-50" : "border-indigo-950/40 bg-[#05060b]"
+                }`}>
+                  <div className="flex flex-col text-left shrink-0">
+                    <span className={`text-[10px] uppercase font-bold ${isStealthMode ? "text-gray-700 font-sans" : "text-[#747bbd] font-mono"}`}>Tipo de Destino das Tags:</span>
+                    <span className={`text-[8.5px] mt-0.5 ${isStealthMode ? "text-gray-500 font-sans" : "text-slate-500 font-mono"}`}>
+                      Selecione onde injetar as tags descritas nas linhas
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-4">
+                    <label className={`flex items-center gap-1.5 text-xs font-bold cursor-pointer font-sans ${isStealthMode ? "text-gray-750" : "text-indigo-200"}`}>
+                      <input
+                        type="radio"
+                        name="advancedField"
+                        value="add_tags"
+                        checked={advancedField === "add_tags"}
+                        onChange={() => setAdvancedField("add_tags")}
+                        disabled={selectedCategory === "nome"}
+                        className="accent-fuchsia-500 cursor-pointer"
+                      />
+                      <span>Infundir (add_tags)</span>
+                    </label>
+
+                    <label className={`flex items-center gap-1.5 text-xs font-bold cursor-pointer font-sans ${isStealthMode ? "text-gray-750" : "text-indigo-200"}`}>
+                      <input
+                        type="radio"
+                        name="advancedField"
+                        value="req_tags"
+                        checked={advancedField === "req_tags"}
+                        onChange={() => setAdvancedField("req_tags")}
+                        disabled={selectedCategory === "demografia" || selectedCategory === "estado"}
+                        className="accent-fuchsia-500 cursor-pointer"
+                      />
+                      <span>Exigir (req_tags)</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Footer and controls */}
+                <div className={`border-t pt-4 mt-4 flex justify-end gap-2 ${
+                  isStealthMode ? "border-gray-200" : "border-indigo-950/80"
+                }`}>
+                  <button
+                    onClick={() => {
+                      setIsAdvancedModalOpen(false);
+                      setAdvancedText("");
+                    }}
+                    className={`px-4 py-2 text-xs font-bold cursor-pointer tracking-tight transition-all rounded-xl ${
+                      isStealthMode 
+                        ? "bg-white hover:bg-gray-100 border border-gray-300 text-gray-750 font-sans" 
+                        : "bg-slate-950 hover:bg-slate-900 border border-indigo-950 text-indigo-400 hover:text-indigo-300"
+                    }`}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => handleAdvancedInjection(advancedText, advancedField)}
+                    className={`px-4 py-2 text-xs font-bold cursor-pointer tracking-tight transition-all flex items-center gap-1.5 rounded-xl ${
+                      isStealthMode 
+                        ? "bg-black text-white hover:bg-gray-800 font-sans" 
+                        : "bg-gradient-to-r from-indigo-650 to-fuchsia-650 hover:from-indigo-600 hover:to-fuchsia-600 text-white shadow-lg"
+                    }`}
+                  >
+                    <Terminal className="w-3.5 h-3.5" />
+                    <span>Processar e Injetar</span>
                   </button>
                 </div>
 

@@ -16,8 +16,21 @@ import {
   FolderOpen,
   Filter,
   X,
-  Sliders
+  Sliders,
+  Cloud,
+  CloudUpload,
+  LogOut,
+  Loader,
+  UserCheck
 } from "lucide-react";
+import { 
+  initAuth, 
+  signInWithGoogle, 
+  logoutFromGoogle, 
+  fetchSpreadsheetMetadata, 
+  updateGoogleSheetsValuesInBatch,
+  BatchUpdateRange
+} from "../utils/googleAuth";
 
 interface BlockMatrixEditorProps {
   demografia: Demografia[];
@@ -44,6 +57,204 @@ export const BlockMatrixEditor: React.FC<BlockMatrixEditorProps> = ({
 }) => {
   // Active sub-tab target
   const [activeSubTab, setActiveSubTab] = useState<"demo" | "socio" | "cid" | "est" | "nom" | "tags">("demo");
+
+  // Google Auth & Cloud Sync States
+  const [googleUser, setGoogleUser] = useState<any>(null);
+  const [googleToken, setGoogleToken] = useState<string | null>(null);
+  const [cloudSyncLoading, setCloudSyncLoading] = useState(false);
+  const [cloudSyncMessage, setCloudSyncMessage] = useState<string | null>(null);
+
+  // GID-to-subtab configurations
+  const SUBTAB_GID_MAP: Record<"demo" | "socio" | "cid" | "est" | "nom" | "tags", { gid: number; fallbackTitle: string; defaultHeaders: string[] }> = {
+    demo: {
+      gid: 0,
+      fallbackTitle: "Demografia",
+      defaultHeaders: ["id_demo", "descricao", "idade_min", "idade_max", "peso_base", "add_tags"]
+    },
+    socio: {
+      gid: 1646832095,
+      fallbackTitle: "Socioeconomico",
+      defaultHeaders: ["id_socio", "profissao", "req_tags", "mult_tags", "peso_base", "add_tags"]
+    },
+    cid: {
+      gid: 933912219,
+      fallbackTitle: "Cidades",
+      defaultHeaders: ["id_cidade", "nome_cidade", "req_tags", "peso_base", "add_tags"]
+    },
+    est: {
+      gid: 1321492706,
+      fallbackTitle: "Estados",
+      defaultHeaders: ["id_estado", "nome_estado", "peso_base", "add_tags"]
+    },
+    nom: {
+      gid: 1812951774,
+      fallbackTitle: "Nomes",
+      defaultHeaders: ["id_nome", "nome", "peso_base", "req_tags"]
+    },
+    tags: {
+      gid: 2103085223,
+      fallbackTitle: "Tags",
+      defaultHeaders: ["tag", "mod_saude", "mod_felicidade", "mod_renda_mensal"]
+    }
+  };
+
+  useEffect(() => {
+    const unsubscribe = initAuth(
+      (u, tk) => {
+        setGoogleUser(u);
+        setGoogleToken(tk);
+      },
+      () => {
+        setGoogleUser(null);
+        setGoogleToken(null);
+      }
+    );
+    return () => unsubscribe();
+  }, []);
+
+  const handleGoogleLogin = async () => {
+    setCloudSyncLoading(true);
+    setCloudSyncMessage("Autenticando via Google...");
+    try {
+      const res = await signInWithGoogle();
+      if (res) {
+        setGoogleUser(res.user);
+        setGoogleToken(res.accessToken);
+        setExportFeedback("Autenticação com o Google realizada com sucesso!");
+        setTimeout(() => setExportFeedback(null), 5000);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setExportFeedback(`Falha no Login: ${err.message || err}`);
+      setTimeout(() => setExportFeedback(null), 6000);
+    } finally {
+      setCloudSyncLoading(false);
+      setCloudSyncMessage(null);
+    }
+  };
+
+  const handleGoogleLogout = async () => {
+    if (window.confirm("Deseja realmente desconectar sua conta do Google?")) {
+      await logoutFromGoogle();
+      setGoogleUser(null);
+      setGoogleToken(null);
+      setExportFeedback("Desconectado de sua Conta Google.");
+      setTimeout(() => setExportFeedback(null), 5000);
+    }
+  };
+
+  const handleSyncActiveTabToGoogleSheets = async () => {
+    if (!googleToken) {
+      alert("Autenticação necessária. Por favor, conecte-se com o Google primeiro.");
+      return;
+    }
+
+    const config = SUBTAB_GID_MAP[activeSubTab];
+    if (!config) return;
+
+    // Get confirmation first before mutating
+    const confirmed = window.confirm(
+      `ATENÇÃO: Você está prestes a sincronizar diretamente com a nuvem!\n\n` +
+      `Isso irá sobrescrever completamente a aba da planilha ativa (${config.fallbackTitle}) ` +
+      `pelas suas modificações locais em memória.\n\n` +
+      `Deseja prosseguir com o Batch Commit Manual?`
+    );
+
+    if (!confirmed) return;
+
+    setCloudSyncLoading(true);
+    setCloudSyncMessage("Enviando dados para a Forja...");
+
+    try {
+      const docId = "1cxHlvoMKiuYq8iz0_vxPEGT6WQv082MdRLrsRqEoaxk";
+
+      // 1. Resolve exact sheet title dynamically via Google metadata lookup
+      let sheetTitle = config.fallbackTitle;
+      try {
+        const metadata = await fetchSpreadsheetMetadata(docId, googleToken);
+        const matchingSheet = metadata.sheets.find(
+          (s) => s.properties.sheetId === config.gid
+        );
+        if (matchingSheet) {
+          sheetTitle = matchingSheet.properties.title;
+        }
+      } catch (metaErr) {
+        console.warn("Metadados não resolvidos, usando fallback do título:", metaErr);
+      }
+
+      // 2. Format row values safely
+      let standardHeaders = config.defaultHeaders;
+      let dataList: any[] = [];
+
+      if (activeSubTab === "demo") dataList = localDemo;
+      else if (activeSubTab === "socio") dataList = localSocio;
+      else if (activeSubTab === "cid") dataList = localCid;
+      else if (activeSubTab === "est") dataList = localEst;
+      else if (activeSubTab === "nom") dataList = localNom;
+      else if (activeSubTab === "tags") dataList = localTags;
+
+      const dynamicHeaders = getDynamicHeaders(dataList);
+      const allHeaders = [...standardHeaders, ...dynamicHeaders];
+
+      const toValueCell = (val: any) => {
+        if (val === undefined || val === null) return "";
+        if (Array.isArray(val)) {
+          return val.join(", ");
+        }
+        if (typeof val === "object") {
+          return Object.entries(val).map(([k, v]) => `${k}:${v}`).join(", ");
+        }
+        return val;
+      };
+
+      // Construct values matrices
+      const sheetHeaderRow = allHeaders;
+      const sheetRowsList = dataList.map((item) => {
+        return allHeaders.map((header) => toValueCell(item[header]));
+      });
+
+      const finalValuesPayload = [sheetHeaderRow, ...sheetRowsList];
+
+      // Define safe ranges with double quotes or quotes for spacing
+      const activeRangeToClear = `'${sheetTitle}'!A1:Z5000`;
+      const activeRangeToUpdate = `'${sheetTitle}'!A1`;
+
+      const batchData: BatchUpdateRange[] = [
+        {
+          range: activeRangeToUpdate,
+          values: finalValuesPayload,
+        },
+      ];
+
+      // 3. Execute cloud batch update cleanly!
+      await updateGoogleSheetsValuesInBatch(
+        docId,
+        googleToken,
+        batchData,
+        [activeRangeToClear]
+      );
+
+      setExportFeedback(`Sucesso! ${dataList.length} itens sincronizados na nuvem (${sheetTitle}).`);
+      setTimeout(() => setExportFeedback(null), 8000);
+
+      // 4. Force state update inside client or warn user to reload
+      try {
+        await onResetFromSheets();
+      } catch (reloadErr) {
+        console.warn("Não foi possível atualizar dados locais:", reloadErr);
+      }
+    } catch (err: any) {
+      console.error(err);
+      // Legible permission / rate limit error capture
+      const readableErr = err.message || JSON.stringify(err);
+      alert(`[Erro de Sincronização] Não foi possível salvar na nuvem.\n\nMotivo:\n${readableErr}`);
+      setExportFeedback("Erro de Sincronização. Verifique permissões.");
+      setTimeout(() => setExportFeedback(null), 8000);
+    } finally {
+      setCloudSyncLoading(false);
+      setCloudSyncMessage(null);
+    }
+  };
 
   // Local copies of rules for isolation
   const [localDemo, setLocalDemo] = useState<Demografia[]>([]);
@@ -770,7 +981,27 @@ export const BlockMatrixEditor: React.FC<BlockMatrixEditorProps> = ({
     : -1;
 
   return (
-    <div id="ruleforge-block-editor-view" className="space-y-3.5 text-slate-100 animate-fade-in text-left">
+    <div id="ruleforge-block-editor-view" className="space-y-3.5 text-slate-100 animate-fade-in text-left relative">
+      
+      {/* CLOUD SYNC LOCKING OVERLAY */}
+      {cloudSyncLoading && (
+        <div style={{ zIndex: 999999 }} className="absolute inset-x-0 inset-y-0 bg-[#020306]/85 backdrop-blur-md flex flex-col items-center justify-center gap-4 rounded-2xl pointer-events-auto">
+          <div className="relative">
+            <div className="w-16 h-16 rounded-full border border-indigo-500/30 flex items-center justify-center animate-pulse bg-indigo-950/20">
+              <Loader className="w-8 h-8 text-fuchsia-500 animate-spin" />
+            </div>
+            <CloudUpload className="w-5 h-5 text-indigo-400 absolute bottom-0 right-0 animate-bounce" />
+          </div>
+          <div className="text-center space-y-1 px-4">
+            <h3 className="text-xs sm:text-sm font-black tracking-widest text-[#FFBF00] uppercase font-mono animate-pulse">
+              {cloudSyncMessage || "Transmitindo dados para a Forja da Nuvem..."}
+            </h3>
+            <p className="text-[9px] text-[#747bbd] font-mono leading-relaxed max-w-sm mx-auto">
+              Segurança ativada: Esta interface está congelada de modo preventivo até que as planilhas do Google sejam totalmente reescritas e reindexadas.
+            </p>
+          </div>
+        </div>
+      )}
       
       {/* 1. COMPACT INTRO HEADER */}
       <div className="bg-[#10121a]/95 border border-slate-800 rounded-xl p-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 relative overflow-hidden">
@@ -1954,6 +2185,43 @@ export const BlockMatrixEditor: React.FC<BlockMatrixEditorProps> = ({
             <Workflow className="w-3.5 h-3.5 text-purple-200" />
             <span>Copiar Prompt de Sincronização Engine</span>
           </button>
+
+          {/* BOTÃO 3: Sincronização direta por Planilhas GAPI */}
+          {!googleToken ? (
+            <button
+              type="button"
+              onClick={handleGoogleLogin}
+              className="py-1.5 px-3 bg-gradient-to-r from-[#ea4335] to-[#fbbc05] hover:from-[#d33a2c] hover:to-[#e5ac04] text-white font-black font-mono text-[9px] uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md text-center"
+            >
+              <Cloud className="w-3.5 h-3.5 text-white animate-pulse" />
+              <span>Conectar c/ Google</span>
+            </button>
+          ) : (
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5">
+              <div className="flex items-center gap-1 px-2 py-0.5 bg-slate-900 border border-slate-800 rounded-md text-[8px] font-mono text-slate-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                <span className="max-w-[75px] truncate text-slate-300 font-bold" title={googleUser?.displayName}>
+                  {googleUser?.displayName || "Conectado"}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleGoogleLogout}
+                  className="ml-1 text-[8px] text-rose-400 hover:text-rose-300 font-bold underline cursor-pointer shrink-0"
+                >
+                  Sair
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleSyncActiveTabToGoogleSheets}
+                className="py-1.5 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black font-mono text-[9px] uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md text-center"
+              >
+                <CloudUpload className="w-3.5 h-3.5 text-emerald-100" />
+                <span>Sincronizar c/ Nuvem</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
