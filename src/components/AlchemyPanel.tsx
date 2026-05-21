@@ -14,6 +14,7 @@ import {
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { Demografia, Socioeconomico, Estado, TagDef, NomeDef, CidadeDef } from "../types";
+import { useStealthMode } from "../context/StealthModeContext";
 import { 
   Sparkles, 
   HelpCircle, 
@@ -206,6 +207,7 @@ const DraggableGem: React.FC<DraggableGemProps> = ({
   onClick,
   tagDefList
 }) => {
+  const { isStealthMode } = useStealthMode();
   const [isEditing, setIsEditing] = useState(false);
   const [tempVal, setTempVal] = useState(weight !== undefined ? String(weight) : "");
   const [showTooltip, setShowTooltip] = useState(false);
@@ -268,7 +270,9 @@ const DraggableGem: React.FC<DraggableGemProps> = ({
               e.stopPropagation();
               setIsEditing(false);
             }}
-            className="fixed inset-0 z-[1000] bg-indigo-950/80 backdrop-blur-md cursor-pointer pointer-events-auto"
+            className={`fixed inset-0 z-[1000] cursor-pointer pointer-events-auto ${
+              isStealthMode ? "bg-black/20" : "bg-indigo-950/80 backdrop-blur-md"
+            }`}
           />
         )}
       </AnimatePresence>
@@ -280,16 +284,22 @@ const DraggableGem: React.FC<DraggableGemProps> = ({
         onMouseEnter={() => setShowTooltip(true)}
         onMouseLeave={() => setShowTooltip(false)}
         transition={{ type: "spring", stiffness: 350, damping: 25 }}
-        className={`text-[10px] font-mono font-bold rounded-xl px-2.5 py-2 select-none flex flex-col justify-between gap-1 transition-all duration-200 border cursor-grab active:cursor-grabbing relative overflow-hidden ${
-          isDragging ? "opacity-30 border-fuchsia-500 scale-95" : ""
+        className={`text-[10px] font-mono font-bold px-2.5 py-2 select-none flex flex-col justify-between gap-1 transition-all duration-200 border cursor-grab active:cursor-grabbing relative overflow-hidden ${
+          isStealthMode 
+            ? "rounded-none bg-white border-gray-300 text-gray-750" 
+            : "rounded-xl"
+        } ${
+          isDragging ? (isStealthMode ? "opacity-30 border-gray-400" : "opacity-30 border-fuchsia-500 scale-95") : ""
         } ${
           isEditing 
-            ? "z-[1050] relative scale-110 !shadow-[0_0_30px_rgba(168,85,247,0.7)] border-fuchsia-400 bg-slate-950 text-white" 
+            ? (isStealthMode ? "z-[1050] relative border-gray-400 bg-white text-gray-800 shadow-sm" : "z-[1050] relative scale-110 !shadow-[0_0_30px_rgba(168,85,247,0.7)] border-fuchsia-400 bg-slate-950 text-white")
             : hasWeight 
-              ? "ring-2 ring-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.5)] border-yellow-400 bg-gradient-to-br from-yellow-950 to-amber-900/60 text-yellow-300 font-extrabold"
+              ? (isStealthMode ? "border-gray-500 bg-gray-50 text-gray-800 font-extrabold" : "ring-2 ring-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.5)] border-yellow-400 bg-gradient-to-br from-yellow-950 to-amber-900/60 text-yellow-300 font-extrabold")
               : isSelected 
-                ? "bg-gradient-to-br from-fuchsia-600 to-purple-800 text-white shadow-[0_0_15px_rgba(168,85,247,0.8)] scale-102 ring-2 ring-white border-fuchsia-400"
-                : `${colors.bg} ${colors.text} ${colors.border} hover:scale-[1.03] shadow-lg`
+                ? (isStealthMode ? "bg-gray-200 text-gray-900 font-black border-gray-400 animate-none" : "bg-gradient-to-br from-fuchsia-600 to-purple-800 text-white shadow-[0_0_15px_rgba(168,85,247,0.8)] scale-102 ring-2 ring-white border-fuchsia-400")
+                : isStealthMode 
+                  ? "bg-white text-gray-700 border-gray-300"
+                  : `${colors.bg} ${colors.text} ${colors.border} hover:scale-[1.03] shadow-lg`
         }`}
       >
         {/* 3. O REFLEXO DINÂMICO (Glint laser shine) */}
@@ -529,6 +539,7 @@ interface SocketedGemProps {
 }
 
 const SocketedGem: React.FC<SocketedGemProps> = ({ id, tag, weight, slotType, onRemove }) => {
+  const { isStealthMode } = useStealthMode();
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ 
     id,
     data: {
@@ -554,20 +565,28 @@ const SocketedGem: React.FC<SocketedGemProps> = ({ id, tag, weight, slotType, on
       style={style}
       {...listeners}
       {...attributes}
-      className={`text-[10px] font-mono font-bold transition-all duration-150 border px-2.5 py-1.5 rounded-xl flex items-center gap-1.5 ring-1 cursor-grab active:cursor-grabbing hover:scale-105 select-none ${
+      className={`text-[10px] font-mono font-bold transition-all duration-150 border px-2.5 py-1.5 select-none ${
+        isStealthMode 
+          ? "rounded-none bg-white text-gray-750 border-gray-300 hover:scale-100" 
+          : "rounded-xl cursor-grab active:cursor-grabbing hover:scale-105 ring-1"
+      } ${
         isDragging ? "opacity-45" : ""
       } ${
-        hasWeight
-          ? "from-yellow-950 to-amber-900/80 text-yellow-250 border-yellow-500 shadow-[0_0_12px_rgba(250,204,21,0.35)] ring-yellow-400/25"
-          : slotType === "req" 
-            ? "from-[#200e05] to-[#120601] text-orange-300 border-orange-500/50 shadow-[0_0_8px_rgba(249,115,22,0.2)] ring-orange-500/10" 
-            : "from-cyan-950 to-blue-950 text-cyan-200 border-cyan-500/50 shadow-[0_0_10px_rgba(6,182,212,0.25)] ring-cyan-500/25"
+        isStealthMode 
+          ? "" 
+          : hasWeight
+            ? "from-yellow-950 to-amber-900/80 text-yellow-250 border-yellow-500 shadow-[0_0_12px_rgba(250,204,21,0.35)] ring-yellow-400/25"
+            : slotType === "req" 
+              ? "from-[#200e05] to-[#120601] text-orange-300 border-orange-500/50 shadow-[0_0_8px_rgba(249,115,22,0.2)] ring-orange-500/10" 
+              : "from-cyan-950 to-blue-950 text-cyan-200 border-cyan-500/50 shadow-[0_0_10px_rgba(6,182,212,0.25)] ring-cyan-500/25"
       }`}
     >
       <span>
-        {hasWeight ? "🔱" : slotType === "req" ? "🔹" : "🔮"} {tag}
+        {isStealthMode ? "📎" : (hasWeight ? "🔱" : slotType === "req" ? "🔹" : "🔮")} {tag}
         {hasWeight && (
-          <span className="text-[8px] bg-yellow-400 text-[#090b14] px-1 py-[1px] rounded font-extrabold ml-1 leading-none">
+          <span className={`text-[8px] px-1 py-[1px] rounded font-extrabold ml-1 leading-none ${
+            isStealthMode ? "bg-gray-200 text-gray-800" : "bg-yellow-400 text-[#090b14]"
+          }`}>
             {weight}x
           </span>
         )}
@@ -623,6 +642,7 @@ export const AlchemyPanel: React.FC<AlchemyPanelProps> = ({
   cidades,
   setCidades
 }) => {
+  const { isStealthMode } = useStealthMode();
   // Alchemy shelf and crucible state managers
   const [selectedCategory, setSelectedCategory] = useState<"demografia" | "socioeconomico" | "cidade" | "estado" | "nome">("socioeconomico");
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
@@ -684,14 +704,14 @@ export const AlchemyPanel: React.FC<AlchemyPanelProps> = ({
   // Retroactive paradox alert results and interactive scanner layout
   const [scannerOpen, setScannerOpen] = useState(false);
   const [anomalies, setAnomalies] = useState<{ id: string; name: string; type: string; category: "demografia" | "socioeconomico" | "cidade" | "estado" | "nome"; conflicts: string[] }[]>([]);
-  const [activeToast, setActiveToast] = useState<{ message: string; sub: string; isError: boolean } | null>(null);
+  const [activeToast, setActiveToast] = useState<{ message: string; sub: string; isError: boolean; type?: "error" | "success" | "warning" } | null>(null);
   
   // Cauldron visual shaking triggers to react to paradox blockages
   const [isCauldronParadoxShaked, setIsCauldronParadoxShaked] = useState(false);
 
   // Trigger brief visual popup feedback message
-  const triggerToast = (message: string, sub: string, isError: boolean) => {
-    setActiveToast({ message, sub, isError });
+  const triggerToast = (message: string, sub: string, isError: boolean, type?: "error" | "success" | "warning") => {
+    setActiveToast({ message, sub, isError, type: type || (isError ? "error" : "success") });
     setTimeout(() => {
       setActiveToast(null);
     }, 6000);
@@ -700,50 +720,156 @@ export const AlchemyPanel: React.FC<AlchemyPanelProps> = ({
   const handleSmartPaste = (rawText: string) => {
     if (!rawText || !rawText.trim()) return;
     
-    // Split by commas, semicolons or line breaks
-    const parts = rawText.split(/,|\n/).map(s => s.trim()).filter(Boolean);
+    // Split by commas, semicolons, or line breaks to be highly resilient
+    const parts = rawText.split(/[,;\n\r]+/).map(s => s.trim()).filter(Boolean);
     if (parts.length === 0) {
-      triggerToast("Erro de leitura", "Nenhum item válido encontrado no texto colado.", true);
+      triggerToast("Erro de leitura", "Nenhum item válido encontrado no texto colado.", true, "error");
       return;
     }
 
-    // Match only items in the current active tab (alchemyItemsList)
-    const matchedItems = alchemyItemsList.filter(item => 
-      parts.some(p => 
-        p.toLowerCase() === item.id.trim().toLowerCase() || 
-        p.toLowerCase() === item.name.trim().toLowerCase()
-      )
-    );
+    // Normalization helper to strip accents/diacritics and normalize casing safely
+    const normalizeStr = (str: string) => {
+      if (!str) return "";
+      return str
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .trim();
+    };
 
-    const matchedIds = matchedItems.map(item => item.id);
+    const matchedIdsSet = new Set<string>();
+    const matchedNamesSet = new Set<string>();
     
-    // Count unmatched parts
     let foundPartsCount = 0;
+    const collisionsList: string[] = [];
+
     parts.forEach(p => {
-      const isFound = alchemyItemsList.some(item => 
-        p.toLowerCase() === item.id.trim().toLowerCase() || 
-        p.toLowerCase() === item.name.trim().toLowerCase()
-      );
-      if (isFound) foundPartsCount++;
+      let mainName = p;
+      let filterTag: string | null = null;
+
+      if (p.includes('/')) {
+        const index = p.indexOf('/');
+        mainName = p.substring(0, index).trim();
+        filterTag = p.substring(index + 1).trim();
+      }
+
+      const normMainName = normalizeStr(mainName);
+
+      // Find all matches in alchemyItemsList for this mainName (id or name match, with diacritic resilience)
+      const matches = alchemyItemsList.filter(item => {
+        const normId = normalizeStr(item.id);
+        const normName = normalizeStr(item.name);
+
+        const idMatch = normId === normMainName;
+        const nameMatch = normName === normMainName;
+
+        if (!idMatch && !nameMatch) return false;
+
+        // If a filter tag is specified, match strictly
+        if (filterTag) {
+          const lowerFilter = filterTag.toLowerCase().trim();
+          
+          // 1. Check req_tags with comprehensive prefix stripping (est_, uf_, prof_, cid_, etc.)
+          const inReqTags = (item.req_tags || []).some((t: string) => {
+            const normTag = t.toLowerCase().trim();
+            return (
+              normTag === lowerFilter || 
+              normTag.includes(lowerFilter) ||
+              normTag.replace(/^[a-z]{2,4}_/, "") === lowerFilter
+            );
+          });
+
+          // 2. Check add_tags
+          const inAddTags = (item.add_tags || []).some((t: string) => {
+            const normTag = t.toLowerCase().trim();
+            return (
+              normTag === lowerFilter || 
+              normTag.includes(lowerFilter) ||
+              normTag.replace(/^[a-z]{2,4}_/, "") === lowerFilter
+            );
+          });
+
+          // 3. Check item's ID containing filter prefix/suffix
+          const inId = normId.includes(lowerFilter) || normId.replace(/^[a-z]{2,4}_/, "") === lowerFilter;
+
+          // 4. Check rawItem properties for matches (e.g. Estado/Pai property or raw fields)
+          const inRawProps = item.rawItem ? Object.entries(item.rawItem).some(([key, val]) => {
+            if (typeof val === 'string') {
+              const normVal = normalizeStr(val);
+              return (
+                normVal === lowerFilter || 
+                normVal.includes(lowerFilter) ||
+                normVal.replace(/^[a-z]{2,4}_/, "") === lowerFilter
+              );
+            }
+            if (Array.isArray(val)) {
+              return val.some(v => {
+                if (typeof v !== 'string') return false;
+                const normVal = normalizeStr(v);
+                return (
+                  normVal === lowerFilter || 
+                  normVal.includes(lowerFilter) ||
+                  normVal.replace(/^[a-z]{2,4}_/, "") === lowerFilter
+                );
+              });
+            }
+            return false;
+          }) : false;
+
+          return inReqTags || inAddTags || inId || inRawProps;
+        }
+
+        return true;
+      });
+
+      if (matches.length > 0) {
+        foundPartsCount++;
+        
+        // Report collisions ONLY if there is NO filter tag and multiple matches are found
+        if (!filterTag && matches.length > 1) {
+          collisionsList.push(mainName);
+        }
+
+        matches.forEach(item => {
+          matchedIdsSet.add(item.id);
+          matchedNamesSet.add(item.name);
+        });
+      }
     });
 
+    const matchedIds = Array.from(matchedIdsSet);
     const notFoundCount = parts.length - foundPartsCount;
 
     if (matchedIds.length > 0) {
       // Merge with already selected IDs
       setSelectedItemIds(prev => Array.from(new Set([...prev, ...matchedIds])));
       setSmartPasteText(""); // clear input upon success
-      
-      triggerToast(
-        "📋 Smart Paste Concluído!",
-        `${matchedIds.length} item(ns) selecionado(s). ${notFoundCount > 0 ? `${notFoundCount} ignorados (não encontrados na aba atual).` : "Todos combinados!"}`,
-        false
-      );
+
+      if (collisionsList.length > 0) {
+        // Warning due to collision
+        const uniqueCollisions = Array.from(new Set(collisionsList));
+        const collisionText = uniqueCollisions.map(c => `'${c}'`).join(", ");
+        triggerToast(
+          "⚠️ Colisões de Nome Detectadas",
+          `Atenção: Encontramos múltiplos itens com o nome ${collisionText}. Considere usar o formato Nome/Tag (ex: Bom Jesus/RS) para precisão.`,
+          false,
+          "warning"
+        );
+      } else {
+        // Normal success toast
+        triggerToast(
+          "📋 Smart Paste Concluído!",
+          `${matchedIds.length} item(ns) selecionado(s). ${notFoundCount > 0 ? `${notFoundCount} ignorados (não encontrados na aba atual).` : "Todos combinados!"}`,
+          false,
+          "success"
+        );
+      }
     } else {
       triggerToast(
         "⚠️ Nenhum correspondente",
-        `Os itens especificados não existem no gabinete atual "${selectedCategory.toUpperCase()}".`,
-        true
+        `Os itens especificados não existem ou não batem com os filtros no gabinete atual "${selectedCategory.toUpperCase()}".`,
+        true,
+        "error"
       );
     }
   };
@@ -1777,17 +1903,25 @@ export const AlchemyPanel: React.FC<AlchemyPanelProps> = ({
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -20, scale: 0.9 }}
               className={`fixed top-8 left-1/2 transform -translate-x-1/2 p-4 rounded-2xl shadow-2xl z-[999999] flex items-start gap-3 border max-w-md ${
-                activeToast.isError 
-                  ? "bg-red-950/95 border-red-500/50 text-red-100 shadow-[0_0_30px_rgba(239,68,68,0.4)]"
-                  : "bg-indigo-950/95 border-[#4f46e5]/50 text-indigo-100 shadow-[0_0_30px_rgba(79,70,229,0.4)]"
+                activeToast.type === "warning"
+                  ? "bg-amber-950/95 border-amber-500/50 text-amber-100 shadow-[0_0_30px_rgba(245,158,11,0.4)]"
+                  : activeToast.isError 
+                    ? "bg-red-950/95 border-red-500/50 text-red-100 shadow-[0_0_30px_rgba(239,68,68,0.4)]"
+                    : "bg-indigo-950/95 border-[#4f46e5]/50 text-indigo-100 shadow-[0_0_30px_rgba(79,70,229,0.4)]"
               }`}
             >
-              <ShieldAlert className={`w-5 h-5 mt-0.5 shrink-0 ${activeToast.isError ? "text-red-400" : "text-indigo-400"}`} />
+              <ShieldAlert className={`w-5 h-5 mt-0.5 shrink-0 ${
+                activeToast.type === "warning"
+                  ? "text-amber-400"
+                  : activeToast.isError 
+                    ? "text-red-400" 
+                    : "text-indigo-400"
+              }`} />
               <div className="text-left font-mono">
                 <div className="text-xs font-black uppercase tracking-wider">{activeToast.message}</div>
                 <div className="text-[10px] text-slate-350 mt-1 leading-snug">{activeToast.sub}</div>
               </div>
-              <button onClick={() => setActiveToast(null)} className="text-slate-500 hover:text-white shrink-0 ml-1">
+              <button onClick={() => setActiveToast(null)} className="text-slate-500 hover:text-white shrink-0 ml-1 cursor-pointer">
                 <X className="w-3.5 h-3.5" />
               </button>
             </motion.div>
@@ -2195,11 +2329,15 @@ export const AlchemyPanel: React.FC<AlchemyPanelProps> = ({
 
                   {/* SELECTED RECORDS PILLS LIST */}
                   <div className="space-y-1">
-                    <span className="text-[8px] font-mono font-extrabold uppercase text-slate-500">Substâncias sob influência de lote:</span>
+                    <span className={`text-[8px] font-mono font-extrabold uppercase ${isStealthMode ? "text-gray-500" : "text-slate-500"}`}>Substâncias sob influência de lote:</span>
                     <div className="flex flex-wrap gap-1 max-h-[50px] overflow-y-auto pr-1 custom-scrollbar">
                       {alchemyItemsList.filter(it => selectedItemIds.includes(it.id)).map(it => (
-                        <span key={it.id} className="text-[8.5px] font-mono font-bold bg-amber-950/20 border border-amber-950/50 text-amber-400/90 px-2 py-[2.5px] rounded truncate max-w-[130px]" title={it.name}>
-                          📦 {it.name}
+                        <span key={it.id} className={`text-[8.5px] font-mono font-bold px-2 py-[2.5px] truncate max-w-[130px] ${
+                          isStealthMode 
+                            ? "bg-gray-100 border border-gray-300 text-gray-700 rounded-none font-sans" 
+                            : "bg-amber-950/20 border border-amber-950/50 text-amber-400/90 rounded"
+                        }`} title={it.name}>
+                          {isStealthMode ? "📁" : "📦"} {it.name}
                         </span>
                       ))}
                     </div>
@@ -2208,33 +2346,41 @@ export const AlchemyPanel: React.FC<AlchemyPanelProps> = ({
 
                 {/* Crucible caldron state */}
                 <div className="text-center space-y-1 max-w-lg">
-                  <span className="text-[8px] font-mono bg-amber-900/40 text-amber-400 border border-amber-800/30 px-3 py-0.5 rounded-full font-bold uppercase tracking-widest inline-block select-none">
-                    ⚡ CALDEIRÃO EM LOTE OPERANTE
+                  <span className={isStealthMode ? "text-[10px] bg-white text-gray-600 border border-gray-300 px-3 py-0.5 rounded-none font-sans font-bold uppercase inline-block select-none" : "text-[8px] font-mono bg-amber-900/40 text-amber-400 border border-amber-800/30 px-3 py-0.5 rounded-full font-bold uppercase tracking-widest inline-block select-none"}>
+                    {isStealthMode ? "Painel de Configuração de Tags em Lote" : "⚡ CALDEIRÃO EM LOTE OPERANTE"}
                   </span>
                 </div>
 
                 {/* 7. SYSTEM PARADOX ACTIVE CAULDRON WRAPPER (Batch Crucible) */}
                 <motion.div 
-                  animate={isCauldronParadoxShaked ? {
+                  animate={(isCauldronParadoxShaked && !isStealthMode) ? {
                     x: [0, -10, 10, -10, 10, -5, 5, 0],
                     borderColor: ["#d97706", "#ef4444", "#d97706"]
                   } : {}}
                   transition={{ duration: 0.7 }}
-                  className={`w-full grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch max-w-2xl px-2 border-2 rounded-3xl p-5 bg-[#030407]/40 ${
-                    isCauldronParadoxShaked ? "border-red-500 ring-2 ring-red-500/20" : "border-amber-700/60"
+                  className={`w-full grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch max-w-2xl px-2 p-5 ${
+                    isStealthMode 
+                      ? "bg-white border border-gray-300 rounded-none shadow-sm" 
+                      : `bg-[#030407]/40 border-2 rounded-3xl ${isCauldronParadoxShaked ? "border-red-500 ring-2 ring-red-500/20" : "border-amber-700/60"}`
                   }`}
                 >
                   
                   {/* SLOT 1 (DropZone de Requisitos) */}
                   <div className="flex flex-col space-y-1.5 text-left">
-                    <span className="text-[9px] uppercase tracking-wider font-mono text-orange-400 font-extrabold flex items-center gap-1 select-none">
-                      <Sliders className="w-3.5 h-3.5 text-orange-400" />
-                      1. EXIGÊNCIAS EM MASSA (req_tags)
+                    <span className={isStealthMode ? "text-xs font-sans text-gray-700 font-bold" : "text-[9px] uppercase tracking-wider font-mono text-orange-400 font-extrabold flex items-center gap-1 select-none"}>
+                      {isStealthMode ? "Área de Anexo de Dados: Exigências" : <>
+                        <Sliders className="w-3.5 h-3.5 text-orange-400" />
+                        1. EXIGÊNCIAS EM MASSA (req_tags)
+                      </>}
                     </span>
                     
                     <DroppableSlot 
                       id="req_slot"
-                      className={`border-dashed border-2 border-orange-500/40 rounded-2xl p-4 flex flex-col bg-orange-950/5 relative min-h-[160px] justify-center ${
+                      className={isStealthMode ? `border border-gray-300 bg-white relative min-h-[160px] flex flex-col justify-center rounded-none p-4 ${
+                        selectedCategory === "demografia" || selectedCategory === "estado"
+                          ? "opacity-20 pointer-events-none select-none border-gray-200 bg-gray-50 text-gray-400"
+                          : "hover:border-gray-450"
+                      }` : `border-dashed border-2 border-orange-500/40 rounded-2xl p-4 flex flex-col bg-orange-950/5 relative min-h-[160px] justify-center ${
                         selectedCategory === "demografia" || selectedCategory === "estado"
                           ? "opacity-25 pointer-events-none select-none border-indigo-950"
                           : "hover:border-orange-500/70"
@@ -2242,9 +2388,11 @@ export const AlchemyPanel: React.FC<AlchemyPanelProps> = ({
                     >
                       {/* Territory layout locking */}
                       {(selectedCategory === "demografia" || selectedCategory === "estado") && (
-                        <div className="absolute inset-0 bg-[#07080e]/95 rounded-2xl flex flex-col items-center justify-center text-center p-3 z-10">
-                          <Lock className="w-5 h-5 text-indigo-500 mb-1" />
-                          <span className="text-[9px] text-[#42466e] font-mono leading-tight">
+                        <div className={`absolute inset-0 flex flex-col items-center justify-center text-center p-3 z-10 ${
+                          isStealthMode ? "bg-gray-50 rounded-none" : "bg-[#07080e]/95 rounded-2xl"
+                        }`}>
+                          <Lock className={`w-5 h-5 mb-1 ${isStealthMode ? "text-gray-400" : "text-indigo-500"}`} />
+                          <span className={`text-[9px] font-mono leading-tight ${isStealthMode ? "text-gray-400" : "text-[#42466e]"}`}>
                             Sem exigências. Demos/Estados herdam sem restrições de entrada.
                           </span>
                         </div>
@@ -2252,11 +2400,11 @@ export const AlchemyPanel: React.FC<AlchemyPanelProps> = ({
 
                       {batchItemDetails.req_tags.length === 0 ? (
                         <div className="flex flex-col items-center justify-center p-4 text-center space-y-2 select-none">
-                          <div className="w-8 h-8 rounded-full border border-dashed border-orange-500/30 flex items-center justify-center text-xs text-orange-400 font-bold animate-pulse">
+                          <div className={isStealthMode ? "w-8 h-8 border border-gray-300 flex items-center justify-center text-xs text-gray-400 font-bold" : "w-8 h-8 rounded-full border border-dashed border-orange-500/30 flex items-center justify-center text-xs text-orange-400 font-bold animate-pulse"}>
                             +
                           </div>
-                          <span className="text-[9px] text-orange-450/70 font-mono uppercase font-black tracking-wide">
-                            Solte exigências de lote aqui
+                          <span className={isStealthMode ? "text-[10px] text-gray-400 font-sans" : "text-[9px] text-orange-455/70 font-mono uppercase font-black tracking-wide"}>
+                            {isStealthMode ? "Arraste as tags exigidas" : "Solte exigências de lote aqui"}
                           </span>
                         </div>
                       ) : (
@@ -2281,23 +2429,31 @@ export const AlchemyPanel: React.FC<AlchemyPanelProps> = ({
 
                   {/* SLOT 2 (DropZone de Geração) */}
                   <div className="flex flex-col space-y-1.5 text-left">
-                    <span className="text-[9px] uppercase tracking-wider font-mono text-cyan-400 font-extrabold flex items-center gap-1 select-none">
-                      <Database className="w-3.5 h-3.5 text-cyan-400" />
-                      2. GERAÇÃO EM MASSA (add_tags)
+                    <span className={isStealthMode ? "text-xs font-sans text-gray-700 font-bold" : "text-[9px] uppercase tracking-wider font-mono text-cyan-400 font-extrabold flex items-center gap-1 select-none"}>
+                      {isStealthMode ? "Área de Anexo de Dados: Infusões" : <>
+                        <Database className="w-3.5 h-3.5 text-cyan-400" />
+                        2. GERAÇÃO EM MASSA (add_tags)
+                      </>}
                     </span>
 
                     <DroppableSlot 
                       id="add_slot"
-                      className={`border-dashed border-2 border-cyan-500/40 rounded-2xl p-4 flex flex-col bg-cyan-950/5 relative min-h-[160px] justify-center ${
+                      className={isStealthMode ? `border border-gray-300 bg-white relative min-h-[160px] flex flex-col justify-center rounded-none p-4 ${
+                        selectedCategory === "nome"
+                          ? "opacity-20 pointer-events-none select-none border-gray-200 bg-gray-50 text-gray-400"
+                          : "hover:border-gray-450"
+                      }` : `border-dashed border-2 border-cyan-500/40 rounded-2xl p-4 flex flex-col bg-cyan-950/5 relative min-h-[160px] justify-center ${
                         selectedCategory === "nome"
                           ? "opacity-25 pointer-events-none select-none border-indigo-950"
                           : "hover:border-cyan-500/70"
                       }`}
                     >
                       {selectedCategory === "nome" && (
-                        <div className="absolute inset-0 bg-[#07080e]/95 rounded-2xl flex flex-col items-center justify-center text-center p-3 z-10">
-                          <Lock className="w-5 h-5 text-indigo-500 mb-1" />
-                          <span className="text-[9px] text-[#42466e] font-mono leading-tight">
+                        <div className={`absolute inset-0 flex flex-col items-center justify-center text-center p-3 z-10 ${
+                          isStealthMode ? "bg-gray-50 rounded-none" : "bg-[#07080e]/95 rounded-2xl"
+                        }`}>
+                          <Lock className={`w-5 h-5 mb-1 ${isStealthMode ? "text-gray-400" : "text-indigo-500"}`} />
+                          <span className={`text-[9px] font-mono leading-tight ${isStealthMode ? "text-gray-400" : "text-[#42466e]"}`}>
                             Sem infusor de tags. Nomes servem apenas para filtrar por exigência.
                           </span>
                         </div>
@@ -2305,11 +2461,11 @@ export const AlchemyPanel: React.FC<AlchemyPanelProps> = ({
 
                       {batchItemDetails.add_tags.length === 0 ? (
                         <div className="flex flex-col items-center justify-center p-4 text-center space-y-2 select-none">
-                          <div className="w-8 h-8 rounded-full border border-dashed border-cyan-500/30 flex items-center justify-center text-xs text-cyan-400 font-bold animate-pulse">
+                          <div className={isStealthMode ? "w-8 h-8 border border-gray-300 flex items-center justify-center text-xs text-gray-400 font-bold" : "w-8 h-8 rounded-full border border-dashed border-cyan-500/30 flex items-center justify-center text-xs text-cyan-400 font-bold animate-pulse"}>
                             +
                           </div>
-                          <span className="text-[9px] text-cyan-455/70 font-mono uppercase font-black tracking-wide">
-                            Solte infusões de lote aqui
+                          <span className={isStealthMode ? "text-[10px] text-gray-400 font-sans" : "text-[9px] text-cyan-455/70 font-mono uppercase font-black tracking-wide"}>
+                            {isStealthMode ? "Arraste as tags de infusão" : "Solte infusões de lote aqui"}
                           </span>
                         </div>
                       ) : (
@@ -2487,38 +2643,46 @@ export const AlchemyPanel: React.FC<AlchemyPanelProps> = ({
 
                 {/* Crucible caldron state */}
                 <div className="text-center space-y-1 max-w-lg">
-                  <span className="text-[8px] font-mono bg-indigo-900/40 text-indigo-400 border border-indigo-800/30 px-2 py-0.5 rounded font-bold uppercase tracking-widest inline-block select-none">
-                    Reagente Ativo no Caldeirão
+                  <span className={isStealthMode ? "text-[10px] bg-white text-gray-650 border border-gray-300 px-3 py-0.5 rounded-none font-sans font-bold uppercase inline-block select-none" : "text-[8px] font-mono bg-indigo-900/40 text-indigo-400 border border-indigo-800/30 px-2 py-0.5 rounded font-bold uppercase tracking-widest inline-block select-none"}>
+                    {isStealthMode ? "Painel de Configuração de Item Ativo" : "Reagente Ativo no Caldeirão"}
                   </span>
-                  <h3 className="text-lg font-black tracking-tight text-white font-sans flex items-center justify-center gap-2">
-                    <FlaskConical className={`w-4 h-4 text-fuchsia-400 ${bubbleAnimate ? 'animate-bounce' : 'animate-pulse'}`} />
+                  <h3 className={`text-lg font-black tracking-tight font-sans flex items-center justify-center gap-2 ${isStealthMode ? "text-gray-900" : "text-white"}`}>
+                    {!isStealthMode && <FlaskConical className={`w-4 h-4 text-fuchsia-400 ${bubbleAnimate ? 'animate-bounce' : 'animate-pulse'}`} />}
                     {selectedCoreItem.name} 
-                    <span className="font-mono text-xs font-bold text-indigo-400">({selectedCoreItem.id})</span>
+                    <span className={`font-mono text-xs font-bold ${isStealthMode ? "text-gray-500" : "text-indigo-400"}`}>({selectedCoreItem.id})</span>
                   </h3>
                 </div>
 
                 {/* 7. SYSTEM PARADOX ACTIVE CAULDRON WRAPPER (Animation Shake support integrated) */}
                 <motion.div 
-                  animate={isCauldronParadoxShaked ? {
+                  animate={(isCauldronParadoxShaked && !isStealthMode) ? {
                     x: [0, -10, 10, -10, 10, -5, 5, 0],
                     borderColor: ["#1e1b4b", "#ef4444", "#1e1b4b"]
                   } : {}}
                   transition={{ duration: 0.7 }}
-                  className={`w-full grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch max-w-2xl px-2 border-2 rounded-3xl p-5 bg-[#030407]/40 ${
-                    isCauldronParadoxShaked ? "border-red-500 ring-2 ring-red-500/20" : "border-indigo-950"
+                  className={`w-full grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch max-w-2xl px-2 p-5 ${
+                    isStealthMode 
+                      ? "bg-white border border-gray-300 rounded-none shadow-sm"
+                      : `border-2 bg-[#030407]/40 rounded-3xl ${isCauldronParadoxShaked ? "border-red-500 ring-2 ring-red-500/20" : "border-indigo-950"}`
                   }`}
                 >
                   
                   {/* SLOT 1 (DropZone de Requisitos) */}
                   <div className="flex flex-col space-y-1.5 text-left">
-                    <span className="text-[9px] uppercase tracking-wider font-mono text-orange-400 font-extrabold flex items-center gap-1 select-none">
-                      <Sliders className="w-3.5 h-3.5 text-orange-400" />
-                      1. SLOT REVERBERANTE (req_tags)
+                    <span className={isStealthMode ? "text-xs font-sans text-gray-700 font-bold" : "text-[9px] uppercase tracking-wider font-mono text-orange-400 font-extrabold flex items-center gap-1 select-none"}>
+                      {isStealthMode ? "Área de Anexo de Dados: Exigências" : <>
+                        <Sliders className="w-3.5 h-3.5 text-orange-400" />
+                        1. SLOT REVERBERANTE (req_tags)
+                      </>}
                     </span>
                     
                     <DroppableSlot 
                       id="req_slot"
-                      className={`border-dashed border-2 border-orange-500/40 rounded-2xl p-4 flex flex-col bg-orange-950/5 relative min-h-[160px] justify-center ${
+                      className={isStealthMode ? `border border-gray-300 bg-white relative min-h-[160px] flex flex-col justify-center rounded-none p-4 ${
+                        selectedCategory === "demografia" || selectedCategory === "estado"
+                          ? "opacity-20 pointer-events-none select-none border-gray-200 bg-gray-50 text-gray-400"
+                          : "hover:border-gray-450"
+                      }` : `border-dashed border-2 border-orange-500/40 rounded-2xl p-4 flex flex-col bg-orange-950/5 relative min-h-[160px] justify-center ${
                         selectedCategory === "demografia" || selectedCategory === "estado"
                           ? "opacity-25 pointer-events-none select-none border-indigo-950"
                           : "hover:border-orange-500/70"
@@ -2526,9 +2690,11 @@ export const AlchemyPanel: React.FC<AlchemyPanelProps> = ({
                     >
                       {/* Territory layout locking */}
                       {(selectedCategory === "demografia" || selectedCategory === "estado") && (
-                        <div className="absolute inset-0 bg-[#07080e]/95 rounded-2xl flex flex-col items-center justify-center text-center p-3 z-10">
-                          <Lock className="w-5 h-5 text-indigo-500 mb-1" />
-                          <span className="text-[9px] text-[#42466e] font-mono leading-tight">
+                        <div className={`absolute inset-0 flex flex-col items-center justify-center text-center p-3 z-10 ${
+                          isStealthMode ? "bg-gray-50 rounded-none" : "bg-[#07080e]/95 rounded-2xl"
+                        }`}>
+                          <Lock className={`w-5 h-5 mb-1 ${isStealthMode ? "text-gray-400" : "text-indigo-500"}`} />
+                          <span className={`text-[9px] font-mono leading-tight ${isStealthMode ? "text-gray-400" : "text-[#42466e]"}`}>
                             Sem exigências. Demos/Estados herdam sem restrições de entrada.
                           </span>
                         </div>
@@ -2536,11 +2702,11 @@ export const AlchemyPanel: React.FC<AlchemyPanelProps> = ({
 
                       {selectedCoreItem.req_tags.length === 0 ? (
                         <div className="flex flex-col items-center justify-center p-4 text-center space-y-2 select-none">
-                          <div className="w-8 h-8 rounded-full border border-dashed border-orange-500/30 flex items-center justify-center text-xs text-orange-400 font-bold animate-pulse">
+                          <div className={isStealthMode ? "w-8 h-8 border border-gray-300 flex items-center justify-center text-xs text-gray-400 font-bold" : "w-8 h-8 rounded-full border border-dashed border-orange-500/30 flex items-center justify-center text-xs text-orange-400 font-bold animate-pulse"}>
                             +
                           </div>
-                          <span className="text-[9px] text-orange-450/70 font-mono uppercase font-black tracking-wide">
-                            Solte o que este cargo exige
+                          <span className={isStealthMode ? "text-[10px] text-gray-400 font-sans" : "text-[9px] text-orange-450/70 font-mono uppercase font-black tracking-wide"}>
+                            {isStealthMode ? "Arraste as tags exigidas" : "Solte o que este cargo exige"}
                           </span>
                         </div>
                       ) : (
@@ -2565,23 +2731,31 @@ export const AlchemyPanel: React.FC<AlchemyPanelProps> = ({
 
                   {/* SLOT 2 (DropZone de Geração) */}
                   <div className="flex flex-col space-y-1.5 text-left">
-                    <span className="text-[9px] uppercase tracking-wider font-mono text-cyan-400 font-extrabold flex items-center gap-1 select-none">
-                      <Database className="w-3.5 h-3.5 text-cyan-400" />
-                      2. SLOT GERADOR (add_tags)
+                    <span className={isStealthMode ? "text-xs font-sans text-gray-700 font-bold" : "text-[9px] uppercase tracking-wider font-mono text-cyan-400 font-extrabold flex items-center gap-1 select-none"}>
+                      {isStealthMode ? "Área de Anexo de Dados: Infusões" : <>
+                        <Database className="w-3.5 h-3.5 text-cyan-400" />
+                        2. SLOT GERADOR (add_tags)
+                      </>}
                     </span>
 
                     <DroppableSlot 
                       id="add_slot"
-                      className={`border-dashed border-2 border-cyan-500/40 rounded-2xl p-4 flex flex-col bg-cyan-950/5 relative min-h-[160px] justify-center ${
+                      className={isStealthMode ? `border border-gray-300 bg-white relative min-h-[160px] flex flex-col justify-center rounded-none p-4 ${
+                        selectedCategory === "nome"
+                          ? "opacity-20 pointer-events-none select-none border-gray-200 bg-gray-50 text-gray-400"
+                          : "hover:border-gray-450"
+                      }` : `border-dashed border-2 border-cyan-500/40 rounded-2xl p-4 flex flex-col bg-cyan-950/5 relative min-h-[160px] justify-center ${
                         selectedCategory === "nome"
                           ? "opacity-25 pointer-events-none select-none border-indigo-950"
                           : "hover:border-cyan-500/70"
                       }`}
                     >
                       {selectedCategory === "nome" && (
-                        <div className="absolute inset-0 bg-[#07080e]/95 rounded-2xl flex flex-col items-center justify-center text-center p-3 z-10">
-                          <Lock className="w-5 h-5 text-indigo-500 mb-1" />
-                          <span className="text-[9px] text-[#42466e] font-mono leading-tight">
+                        <div className={`absolute inset-0 flex flex-col items-center justify-center text-center p-3 z-10 ${
+                          isStealthMode ? "bg-gray-50 rounded-none" : "bg-[#07080e]/95 rounded-2xl"
+                        }`}>
+                          <Lock className={`w-5 h-5 mb-1 ${isStealthMode ? "text-gray-400" : "text-indigo-500"}`} />
+                          <span className={`text-[9px] font-mono leading-tight ${isStealthMode ? "text-gray-400" : "text-[#42466e]"}`}>
                             Sem infusor de tags. Nomes servem apenas para filtrar por exigência.
                           </span>
                         </div>
@@ -2589,11 +2763,11 @@ export const AlchemyPanel: React.FC<AlchemyPanelProps> = ({
 
                       {selectedCoreItem.add_tags.length === 0 ? (
                         <div className="flex flex-col items-center justify-center p-4 text-center space-y-2 select-none">
-                          <div className="w-8 h-8 rounded-full border border-dashed border-cyan-500/30 flex items-center justify-center text-xs text-cyan-400 font-bold animate-pulse">
+                          <div className={isStealthMode ? "w-8 h-8 border border-gray-300 flex items-center justify-center text-xs text-gray-400 font-bold" : "w-8 h-8 rounded-full border border-dashed border-cyan-500/30 flex items-center justify-center text-xs text-cyan-400 font-bold"}>
                             +
                           </div>
-                          <span className="text-[9px] text-cyan-455/70 font-mono uppercase font-black tracking-wide">
-                            Solte o que este item infunde
+                          <span className={isStealthMode ? "text-[10px] text-gray-400 font-sans" : "text-[9px] text-cyan-455/70 font-mono uppercase font-black tracking-wide"}>
+                            {isStealthMode ? "Arraste as tags de infusão" : "Solte o que este item infunde"}
                           </span>
                         </div>
                       ) : (

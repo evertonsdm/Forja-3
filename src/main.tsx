@@ -2,6 +2,7 @@ import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
+import { StealthModeProvider } from './context/StealthModeContext';
 
 // Global error tracker for mobile debugging
 window.addEventListener('error', function(event) {
@@ -14,6 +15,9 @@ window.addEventListener('unhandledrejection', function(event) {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <StealthModeProvider>
+      <App />
+    </StealthModeProvider>
   </StrictMode>,
 );
+

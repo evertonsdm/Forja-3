@@ -17,6 +17,7 @@ import { BlockMatrixEditor } from "./components/BlockMatrixEditor";
 import { CascadeVisualizer } from "./components/CascadeVisualizer";
 import { AlchemyPanel } from "./components/AlchemyPanel";
 import { parseNomesCSV, parseCidadesCSV, parseSocioeconomicoCSV, parseDemografiaCSV, parseEstadosCSV, parseTagDefCSV } from "./utils/csvParser";
+import { useStealthMode } from "./context/StealthModeContext";
 import { 
   Dices, 
   Settings2, 
@@ -126,6 +127,7 @@ const ProbabilityBar = ({
 };
 
 export default function App() {
+  const { isStealthMode, setIsStealthMode } = useStealthMode();
   // 1. Relational Matrix States (with lazy initialization from localStorage)
   const [demografia, setDemografia] = useState<Demografia[]>(() => {
     try {
@@ -552,34 +554,67 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0d0e12] text-slate-100 flex flex-col py-8 px-4 sm:px-6 lg:px-8 selection:bg-amber-500/30 selection:text-amber-200">
+    <div className={`min-h-screen flex flex-col py-8 px-4 sm:px-6 lg:px-8 transition-colors duration-200 ${
+      isStealthMode 
+        ? "bg-gray-100 text-gray-800 selection:bg-blue-150 selection:text-blue-900" 
+        : "bg-[#0d0e12] text-slate-100 selection:bg-amber-500/30 selection:text-amber-200"
+    }`}>
       
+      {/* 0. STEALTH BOSS TOGGLE BUTTON */}
+      <button
+        onClick={() => setIsStealthMode(!isStealthMode)}
+        className={`fixed top-4 right-4 z-[999999] text-base p-2 w-10 h-10 rounded-full border shadow-md active:scale-95 transition-all flex items-center justify-center cursor-pointer ${
+          isStealthMode 
+            ? "bg-white border-gray-300 hover:bg-gray-50 text-gray-800" 
+            : "bg-slate-900 border-slate-800 hover:border-slate-700 text-slate-100"
+        }`}
+        title={isStealthMode ? "Desativar Modo Furtivo" : "Ativar Modo Furtivo / Boss Key"}
+      >
+        {isStealthMode ? "📊" : "🔮"}
+      </button>
+
       {/* 1. BRANDING HERO HEADER */}
-      <header className="max-w-7xl mx-auto w-full mb-8 text-center sm:text-left flex flex-col sm:flex-row items-center justify-between gap-6 border-b border-slate-800 pb-6">
+      <header className={`max-w-7xl mx-auto w-full mb-8 text-center sm:text-left flex flex-col sm:flex-row items-center justify-between gap-6 border-b pb-6 ${
+        isStealthMode ? "border-gray-300" : "border-slate-800"
+      }`}>
         <div className="space-y-1.5">
           <div className="flex items-center justify-center sm:justify-start gap-3">
-            <span className="bg-[#FFBF00]/10 text-[#FFBF00] font-extrabold px-2.5 py-0.5 text-[10px] rounded border border-[#FFBF00]/20 tracking-wider font-mono uppercase">
+            <span className={`font-extrabold px-2.5 py-0.5 text-[10px] rounded border tracking-wider font-mono uppercase ${
+              isStealthMode 
+                ? "bg-gray-200 border-gray-300 text-gray-600" 
+                : "bg-[#FFBF00]/10 border-[#FFBF00]/20 text-[#FFBF00]"
+            }`}>
               ENGINE V1.5
             </span>
-            <span className="text-[10px] text-slate-300 font-mono tracking-widest uppercase">
+            <span className={`text-[10px] font-mono tracking-widest uppercase ${
+              isStealthMode ? "text-gray-500" : "text-slate-300"
+            }`}>
               RuleForge Sandbox Node
             </span>
           </div>
           
-          <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-white font-sans text-ice animate-pulse-glow">
-            RuleForge <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#FFBF00] to-[#FFAB00]">Engine</span>
+          <h1 className={`text-3xl sm:text-4xl font-black tracking-tight font-sans ${
+            isStealthMode 
+              ? "text-gray-900 font-sans" 
+              : "text-white text-ice animate-pulse-glow"
+          }`}>
+            RuleForge {isStealthMode ? <span>Engine</span> : <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#FFBF00] to-[#FFAB00]">Engine</span>}
           </h1>
-          <p className="text-xs sm:text-sm text-slate-400 font-mono max-w-2xl">
+          <p className={`text-xs sm:text-sm font-mono max-w-2xl ${
+            isStealthMode ? "text-gray-600" : "text-slate-400"
+          }`}>
             Simulador de NPCs guiado por sementes determinísticas em cascata regional e econômica.
           </p>
         </div>
 
         {/* Deterministic Port Status Badge */}
-        <div className="flex items-center gap-3 bg-slate-950/60 border border-slate-800/80 px-4 py-2.5 rounded-xl shadow-inner">
-          <div className="w-2 h-2 rounded-full bg-[#FFBF00] animate-pulse" />
+        <div className={`flex items-center gap-3 border px-4 py-2.5 rounded-xl ${
+          isStealthMode ? "bg-white border-gray-300" : "bg-slate-950/60 border-slate-800/80 shadow-inner"
+        }`}>
+          <div className={`w-2 h-2 rounded-full ${isStealthMode ? "bg-green-600" : "bg-[#FFBF00] animate-pulse"}`} />
           <div className="text-left font-mono">
-            <div className="text-[9px] text-slate-500 uppercase leading-none font-bold">Resolução Lógica</div>
-            <div className="text-xs font-bold text-slate-300 leading-tight">100% Determinístico</div>
+            <div className={`text-[9px] uppercase leading-none font-bold ${isStealthMode ? "text-gray-500" : "text-slate-500"}`}>Resolução Lógica</div>
+            <div className={`text-xs font-bold leading-tight ${isStealthMode ? "text-gray-850" : "text-slate-300"}`}>100% Determinístico</div>
           </div>
         </div>
       </header>
